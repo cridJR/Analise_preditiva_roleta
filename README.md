@@ -66,12 +66,3 @@ O sistema agora mapeia cada número para 5 dimensões estatísticas:
 │   └── Dockerfile       # Build Multi-stage (Node -> Nginx)
 └── docker-compose.yaml  # Orquestração dos serviços (Backend, Front, Redis)
 
-## 🐳 Gestão da Infraestrutura (Docker)
-
-Como o projeto utiliza Docker Compose para orquestrar o Backend, Frontend e Redis, utilize os comandos abaixo para gerenciar o ciclo de vida dos containers:
-
-### 1. Build e Start (Subir o Ambiente)
-Utilize este comando sempre que houver alterações no `main.py`, `App.tsx` ou no `Dockerfile`.
-```bash
-# Otimizado: Builda as imagens e sobe em modo background (detached)
-docker-compose up --build -d
