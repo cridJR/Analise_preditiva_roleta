@@ -1,23 +1,19 @@
 import { useState, useEffect } from 'react';
 
-interface RegistroGiro {
-  numero: number; cor: string; paridade: string; duzia: number; coluna: number; metade: string;
-}
-
 function App() {
-  const [historico, setHistorico] = useState<RegistroGiro[]>([]);
-  const [sugestao, setSugestao] = useState<any>(null);
+  const [historico, setHistorico] = useState<any[]>([]);
+  const [analise, setAnalise] = useState<any>(null);
 
   const fetchDados = async () => {
     try {
       const resH = await fetch('http://localhost:8000/historico');
       const dataH = await resH.json();
-      setHistorico(Array.isArray(dataH) ? dataH : []);
+      setHistorico(dataH);
 
       const resS = await fetch('http://localhost:8000/sugestao');
       const dataS = await resS.json();
-      setSugestao(dataS);
-    } catch (e) { console.error("API offline"); }
+      setAnalise(dataS);
+    } catch (e) { console.error("API Offline"); }
   };
 
   const enviarNumero = async (n: number) => {
@@ -29,57 +25,68 @@ function App() {
     fetchDados();
   };
 
-  const resetar = async () => {
-    if (window.confirm("Limpar histórico do Redis?")) {
-      await fetch('http://localhost:8000/limpar-historico', { method: 'DELETE' });
-      setHistorico([]);
-      setSugestao(null);
-    }
-  };
-
   useEffect(() => {
     fetchDados();
-    const timer = setInterval(fetchDados, 5000);
-    return () => clearInterval(timer);
+    const t = setInterval(fetchDados, 5000);
+    return () => clearInterval(t);
   }, []);
 
   return (
-    <div className="p-6 bg-gray-900 min-h-screen text-white font-sans">
-      <div className="max-w-5xl mx-auto">
-        <header className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
-          <h1 className="text-2xl font-black tracking-tighter">ROULETTE ANALYTICS <span className="text-blue-500">PRO</span></h1>
-          <button onClick={resetar} className="text-[10px] border border-red-600/50 text-red-500 px-3 py-1 rounded hover:bg-red-600 hover:text-white transition-all font-bold">RESET REDIS</button>
+    <div className="p-6 bg-slate-900 min-h-screen text-white font-sans">
+      <div className="max-w-6xl mx-auto">
+        <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+          <h1 className="text-2xl font-black">ROULETTE <span className="text-emerald-500">PRO ANALYZER</span></h1>
+          <div className="flex gap-4">
+             <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-red-500/30">
+                <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
+                <span className="text-xs font-bold">{analise?.v || 0} Vermelhos</span>
+             </div>
+             <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-gray-500/30">
+                <div className="w-3 h-3 bg-black rounded-full border border-white/20"></div>
+                <span className="text-xs font-bold">{analise?.p || 0} Pretos</span>
+             </div>
+          </div>
         </header>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Entrada */}
-          <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-            <h2 className="text-sm font-bold text-gray-400 mb-4 uppercase">Mesa de Giros</h2>
-            <div className="grid grid-cols-6 gap-2">
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* MESA DE INPUT */}
+          <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-2xl">
+            <h2 className="text-sm font-black text-slate-500 uppercase mb-4 tracking-widest">Entrada de Giros</h2>
+            <div className="grid grid-cols-6 sm:grid-cols-9 gap-2">
               {[...Array(37).keys()].map(n => (
-                <button key={n} onClick={() => enviarNumero(n)} className={`p-3 rounded-lg font-bold transition-transform active:scale-90 ${n === 0 ? 'bg-green-600' : [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n) ? 'bg-red-600' : 'bg-black'}`}>
+                <button key={n} onClick={() => enviarNumero(n)} className={`h-12 rounded-lg font-bold transition-all active:scale-90 hover:brightness-125 ${n === 0 ? 'bg-emerald-600' : [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n) ? 'bg-red-600' : 'bg-slate-950'}`}>
                   {n}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Painel Lateral */}
+          {/* PAINEL DE SUGESTÕES */}
           <div className="space-y-4">
-            <div className="bg-blue-600/10 p-6 rounded-2xl border border-blue-500/30 text-center">
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Sugestão Atual</span>
-              <p className="text-4xl font-black mt-2">{sugestao?.sugestao || "---"}</p>
-              {sugestao?.mensagem && <p className="text-xs text-gray-500 mt-2">{sugestao.mensagem}</p>}
+            <div className="bg-emerald-500/10 p-6 rounded-2xl border border-emerald-500/30">
+              <h2 className="text-emerald-500 text-xs font-black uppercase mb-4 tracking-tighter">Sugestões de Entrada</h2>
+              {analise?.sugestoes ? (
+                <div className="space-y-2">
+                  {analise.sugestoes.map((s: string, i: number) => (
+                    <div key={i} className="bg-emerald-500 text-slate-900 font-black p-3 rounded-lg text-center uppercase animate-in slide-in-from-right duration-300">
+                      {s}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-500 italic text-sm text-center py-4">{analise?.mensagem || "Aguardando dados..."}</p>
+              )}
             </div>
 
-            <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-              <h2 className="text-xs font-bold text-gray-500 uppercase mb-4">Fluxo Recente</h2>
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {historico.length > 0 ? historico.map((g, i) => (
-                  <div key={i} className={`min-w-[40px] h-10 flex items-center justify-center rounded font-bold border-b-2 ${g.cor === 'vermelho' ? 'bg-red-600' : g.cor === 'preto' ? 'bg-black' : 'bg-green-600'}`}>
+            {/* HISTÓRICO */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+              <h2 className="text-xs font-bold text-slate-500 uppercase mb-4">Últimos 100 Giros</h2>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {historico.map((g, i) => (
+                  <div key={i} className={`min-w-[35px] h-9 flex items-center justify-center rounded font-bold text-xs ${g.cor === 'vermelho' ? 'bg-red-600' : g.cor === 'preto' ? 'bg-slate-950' : 'bg-emerald-600'}`}>
                     {g.numero}
                   </div>
-                )) : <p className="text-gray-600 text-xs italic">Aguardando dados...</p>}
+                ))}
               </div>
             </div>
           </div>
