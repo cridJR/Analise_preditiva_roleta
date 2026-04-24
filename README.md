@@ -24,10 +24,17 @@ O projeto é orquestrado via Docker para garantir que o ambiente seja idêntico 
 | `DELETE` | `/limpar-historico` | **Admin:** Comando para zerar a base de dados Redis. |
 
 ## 📊 Lógica de Análise (Engine)
-O sistema trabalha com uma amostra mínima de **12 giros** para garantir relevância estatística:
-1. **Cores:** Sugere a cor oposta se uma delas dominar >60% da amostra recente.
-2. **Dúzias/Colunas:** Identifica qual das 3 opções está "atrasada" (frequência < 25%) e sugere a entrada para correção de tendência.
-3. **Persistência:** O histórico é limitado aos últimos 100 números para manter a análise focada na tendência atual da mesa.
+
+🚀 Funcionalidades Principais
+Multi-Strategy Engine: Análise simultânea de Cores, Dúzias e Colunas.
+
+Análise de Cilindro (Racetrack): Identificação de tendências nos setores Voisins du Zéro, Tiers du Cylindre e Orphelins.
+
+Balance Tracker: Visualização em tempo real da paridade entre Vermelhos e Pretos no topo do dashboard.
+
+Timeline Física: Histórico dinâmico com rotulagem automática dos setores do cilindro para identificação de "assinatura do crupiê".
+
+Admin Redis Reset: Botão integrado na UI para limpeza instantânea da base de dados.
 
 ## 🛠 Comandos de Operação
 
