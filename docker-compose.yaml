@@ -1,25 +1,25 @@
 version: '3.8'
 
 services:
-  # Banco de dados em memória para alta performance (SRE)
   redis:
     image: redis:alpine
+    container_name: redis_db
     ports:
       - "6379:6379"
 
-  # API de Análise
   backend:
     build: ./backend
+    container_name: api_analise
     ports:
       - "8000:8000"
-    depends_on:
-      - redis
     environment:
       - REDIS_HOST=redis
+    depends_on:
+      - redis
 
-  # Interface do Usuário
   frontend:
     build: ./frontend
+    container_name: roleta_ui
     ports:
       - "3000:80"
     depends_on:
