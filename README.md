@@ -1,45 +1,40 @@
-# Roulette Predictive Analysis System 🎰
+# Roulette Analysis Pro 🎰
 
-Este projeto é um **Agente de Análise Preditiva** baseado em desvio estatístico para jogos de roleta. O sistema utiliza uma arquitetura de microserviços para processar históricos de giros e sugerir probabilidades baseadas em tendências matemáticas, cobrindo não apenas cores, mas todo o layout da mesa (Dúzias, Colunas e Metades).
+Este sistema é uma plataforma de **Análise de Desvio Estatístico** em tempo real para roleta europeia. Utiliza uma arquitetura de microserviços para processar tendências e sugerir entradas baseadas no "atraso" (vazio estatístico) de setores específicos da mesa, como Cores, Dúzias e Colunas.
+
+## 🚀 Novidades desta Versão
+- **Multi-Strategy Engine:** Análise simultânea de Cores, Dúzias e Colunas.
+- **Balance Tracker:** Visualização em tempo real da quantidade de Vermelhos vs. Pretos no topo do dashboard.
+- **Admin Redis Reset:** Botão de limpeza rápida para expurgar o histórico do banco de dados sem reiniciar os contentores.
+- **SRE Dashboard:** Interface moderna com TailwindCSS, otimizada para monitorização local.
 
 ## 🏗 Arquitetura do Sistema
-
-O sistema opera em uma stack otimizada para baixa latência:
-
-- **Frontend (React + Vite + TS):** Interface responsiva com dashboard de estatísticas em tempo real e entrada de dados intuitiva.
-- **Backend (FastAPI):** API REST de alta performance com middleware de CORS e processamento de dados assíncrono.
-- **Cache (Redis):** Banco NoSQL em memória que atua como a única fonte de verdade para o histórico circular (limitado aos últimos 100 giros).
-
-## 🛠 Stack Tecnológica
-
-* **Linguagem:** Python 3.10+ / TypeScript
-* **Banco de Dados:** Redis (Alpine Image)
-* **Infraestrutura:** Docker & Docker Compose
-* **Segurança:** CORSMiddleware (Configurado para ambientes Dev/Prod)
+O projeto é orquestrado via Docker para garantir que o ambiente seja idêntico em qualquer máquina:
+- **Frontend:** React + Vite + TypeScript (Porta 3000)
+- **Backend:** FastAPI + Uvicorn (Porta 8000)
+- **Cache:** Redis Alpine (Porta 6379)
 
 ## 📡 Endpoints da API
 
-Abaixo, os endpoints disponíveis para integração e monitoramento:
-
 | Método | Rota | Descrição |
 | :--- | :--- | :--- |
-| `POST` | `/input` | Registra um número e mapeia cor, paridade, dúzia, coluna e metade. |
-| `GET` | `/historico` | Retorna o JSON completo dos últimos giros salvos no Redis. |
-| `GET` | `/sugestao` | Motor de análise que sugere a próxima entrada baseada em desvios. |
-| `GET` | `/health-redis` | Verificação de integridade (Health Check) da conexão API <-> Redis. |
-| `DELETE` | `/limpar-historico` | **Admin:** Comando para expurgar a chave de histórico do Redis. |
+| `POST` | `/input` | Regista um novo número e mapeia cor, paridade, dúzia e coluna. |
+| `GET` | `/historico` | Recupera os últimos 100 registos do Redis (Fila Circular). |
+| `GET` | `/sugestao` | Motor de cálculo que identifica desvios estatísticos acima do padrão. |
+| `DELETE` | `/limpar-historico` | **Admin:** Comando para zerar a base de dados Redis. |
 
-## 📊 Inteligência de Dados (Multi-Apostas)
+## 📊 Lógica de Análise (Engine)
+O sistema trabalha com uma amostra mínima de **12 giros** para garantir relevância estatística:
+1. **Cores:** Sugere a cor oposta se uma delas dominar >60% da amostra recente.
+2. **Dúzias/Colunas:** Identifica qual das 3 opções está "atrasada" (frequência < 25%) e sugere a entrada para correção de tendência.
+3. **Persistência:** O histórico é limitado aos últimos 100 números para manter a análise focada na tendência atual da mesa.
 
-O sistema agora mapeia cada número para 5 dimensões estatísticas:
+## 🛠 Comandos de Operação
 
-1.  **Cores:** Vermelho, Preto ou Verde (Zero).
-2.  **Paridade:** Par ou Ímpar.
-3.  **Dúzias:** 1ª (1-12), 2ª (13-24) ou 3ª (25-36).
-4.  **Colunas:** 1ª, 2ª ou 3ª coluna da mesa.
-5.  **Metades:** 1-18 (Low) ou 19-36 (High).
-
-> **Lógica de Sugestão:** O algoritmo identifica "vazios" estatísticos. Se uma cor ou setor está com frequência abaixo do desvio padrão esperado para uma amostra de 36 giros, o sistema sinaliza uma oportunidade de correção.
+### Subir o Ambiente
+```bash
+# Constrói as imagens e inicia os serviços em background
+docker-compose up --build -d
 
 ## 🚀 Como Executar
 
@@ -54,15 +49,23 @@ O sistema agora mapeia cada número para 5 dimensões estatísticas:
 2.  Acesse o Frontend em: `http://localhost:3000`
 3.  Acesse a documentação da API (Swagger) em: `http://localhost:8000/docs`
 
-## 📁 Estrutura de Arquivos
+## 📁 Estrutura de Diretórios
+
+A organização do projeto segue as melhores práticas de isolamento de contexto para Docker:
 
 ```text
 .
 ├── backend/
-│   ├── main.py          # Lógica FastAPI e Conexão Redis
-│   └── Dockerfile       # Build da imagem Python Slim
+│   ├── main.py              # API FastAPI e Lógica de Análise
+│   ├── requirements.txt     # Dependências Python (fastapi, redis, uvicorn)
+│   └── Dockerfile           # Imagem Python para o backend
 ├── frontend/
-│   ├── src/App.tsx      # Dashboard React e Consumo da API
-│   └── Dockerfile       # Build Multi-stage (Node -> Nginx)
-└── docker-compose.yaml  # Orquestração dos serviços (Backend, Front, Redis)
+│   ├── src/
+│   │   ├── App.tsx          # Dashboard React e Trackers de Cores
+│   │   └── main.tsx         # Ponto de entrada do React
+│   ├── index.html           # Template HTML5
+│   ├── package.json         # Scripts e dependências (Vite, Tailwind)
+│   └── Dockerfile           # Build multi-stage para o frontend
+├── docker-compose.yaml      # Orquestração (Frontend, Backend, Redis)
+└── README.md                # Documentação do sistema
 
