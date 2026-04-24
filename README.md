@@ -1,66 +1,77 @@
 # Roulette Predictive Analysis System 🎰
 
-Este projeto é um **Agente de Análise Preditiva** baseado em desvio estatístico para jogos de roleta. Desenvolvido como prova de conceito para fins acadêmicos, o sistema utiliza uma arquitetura moderna de microserviços para processar históricos de giros e sugerir probabilidades baseadas em tendências matemáticas e na Lei dos Grandes Números.
+Este projeto é um **Agente de Análise Preditiva** baseado em desvio estatístico para jogos de roleta. O sistema utiliza uma arquitetura de microserviços para processar históricos de giros e sugerir probabilidades baseadas em tendências matemáticas, cobrindo não apenas cores, mas todo o layout da mesa (Dúzias, Colunas e Metades).
 
 ## 🏗 Arquitetura do Sistema
 
-O sistema segue o padrão de design **Observer-Analyzer**, onde a ingestão de dados é separada da lógica de processamento estatístico.
+O sistema opera em uma stack otimizada para baixa latência:
 
-- **Camada de Ingestão (FastAPI):** Uma API REST de alta performance que recebe os dados dos giros.
-- **Camada de Armazenamento (Redis):** Um banco de dados em memória (NoSQL) utilizado para garantir latência próxima de zero no processamento das sequências.
-- **Motor de Análise:** Algoritmos que calculam o desvio padrão e a frequência de cores, dúzias e paridade em tempo real.
+- **Frontend (React + Vite + TS):** Interface responsiva com dashboard de estatísticas em tempo real e entrada de dados intuitiva.
+- **Backend (FastAPI):** API REST de alta performance com middleware de CORS e processamento de dados assíncrono.
+- **Cache (Redis):** Banco NoSQL em memória que atua como a única fonte de verdade para o histórico circular (limitado aos últimos 100 giros).
 
 ## 🛠 Stack Tecnológica
 
-* **Linguagem:** Python 3.9+
-* **Framework Web:** FastAPI (com documentação automática via Swagger UI)
-* **Banco de Dados:** Redis (In-memory Data Structure Store)
-* **Infraestrutura:** Docker e Docker Compose
-* **Validação de Dados:** Pydantic
+* **Linguagem:** Python 3.10+ / TypeScript
+* **Banco de Dados:** Redis (Alpine Image)
+* **Infraestrutura:** Docker & Docker Compose
+* **Segurança:** CORSMiddleware (Configurado para ambientes Dev/Prod)
+
+## 📡 Endpoints da API
+
+Abaixo, os endpoints disponíveis para integração e monitoramento:
+
+| Método | Rota | Descrição |
+| :--- | :--- | :--- |
+| `POST` | `/input` | Registra um número e mapeia cor, paridade, dúzia, coluna e metade. |
+| `GET` | `/historico` | Retorna o JSON completo dos últimos giros salvos no Redis. |
+| `GET` | `/sugestao` | Motor de análise que sugere a próxima entrada baseada em desvios. |
+| `GET` | `/health-redis` | Verificação de integridade (Health Check) da conexão API <-> Redis. |
+| `DELETE` | `/limpar-historico` | **Admin:** Comando para expurgar a chave de histórico do Redis. |
+
+## 📊 Inteligência de Dados (Multi-Apostas)
+
+O sistema agora mapeia cada número para 5 dimensões estatísticas:
+
+1.  **Cores:** Vermelho, Preto ou Verde (Zero).
+2.  **Paridade:** Par ou Ímpar.
+3.  **Dúzias:** 1ª (1-12), 2ª (13-24) ou 3ª (25-36).
+4.  **Colunas:** 1ª, 2ª ou 3ª coluna da mesa.
+5.  **Metades:** 1-18 (Low) ou 19-36 (High).
+
+> **Lógica de Sugestão:** O algoritmo identifica "vazios" estatísticos. Se uma cor ou setor está com frequência abaixo do desvio padrão esperado para uma amostra de 36 giros, o sistema sinaliza uma oportunidade de correção.
 
 ## 🚀 Como Executar
 
 ### Pré-requisitos
-* [Docker](https://www.docker.com/get-started)
-* [Docker Compose](https://docs.docker.com/compose/install/)
+* Docker e Docker Compose instalados.
 
 ### Instalação e Execução
-1.  Clone este repositório.
-2.  No terminal, dentro da pasta do projeto, execute:
+1.  Na pasta raiz do projeto, execute o build dos containers:
     ```bash
-    docker-compose up -d --build
+    docker-compose up --build -d
     ```
-3.  O sistema estará disponível em:
-    * **API Principal:** `http://localhost:8000`
-    * **Documentação Interativa (Swagger):** `http://localhost:8000/docs`
-
-## 📡 Endpoints da API
-
-Abaixo, os principais comandos para interagir com o sistema:
-
-| Método | Rota | Descrição |
-| :--- | :--- | :--- |
-| `POST` | `/input` | Insere um novo número individualmente. |
-| `POST` | `/input-batch` | Insere uma lista (array) de números para popular o histórico. |
-| `GET` | `/sugestao` | Retorna a predição probabilística para a próxima rodada. |
-| `GET` | `/historico` | Lista os últimos giros registrados com suas propriedades. |
-| `GET` | `/conferir` | Retorna métricas de integridade do banco de dados Redis. |
-
-## 📊 Lógica Preditiva (Resumo Acadêmico)
-
-O motor de análise foca no **Desvio de Tendência**. Se em uma amostra de 50 giros a cor "Vermelha" apareceu apenas 20% das vezes (sendo que a probabilidade teórica é de ~48.6%), o sistema identifica um desvio e aumenta o grau de confiança para a cor oposta na próxima sugestão.
-
-1.  **Frequência de Curto Prazo:** Analisa os últimos 12 giros (um ciclo de dúzias).
-2.  **Frequência de Médio Prazo:** Analisa os últimos 36 giros (um ciclo completo da roleta).
-3.  **Sugestão:** O sistema indica Cor, Paridade (Ímpar/Par) e Dúzia com maior probabilidade de correção estatística.
+2.  Acesse o Frontend em: `http://localhost:3000`
+3.  Acesse a documentação da API (Swagger) em: `http://localhost:8000/docs`
 
 ## 📁 Estrutura de Arquivos
 
 ```text
 .
-├── src/
-│   ├── main.py          # Código fonte da API e Lógica de Análise
-│   └── requirements.txt # Dependências do Python
-├── Dockerfile           # Definição da imagem da aplicação
-├── docker-compose.yml   # Orquestração entre App e Redis
-└── README.md            # Documentação do projeto
+├── backend/
+│   ├── main.py          # Lógica FastAPI e Conexão Redis
+│   └── Dockerfile       # Build da imagem Python Slim
+├── frontend/
+│   ├── src/App.tsx      # Dashboard React e Consumo da API
+│   └── Dockerfile       # Build Multi-stage (Node -> Nginx)
+└── docker-compose.yaml  # Orquestração dos serviços (Backend, Front, Redis)
+
+## 🐳 Gestão da Infraestrutura (Docker)
+
+Como o projeto utiliza Docker Compose para orquestrar o Backend, Frontend e Redis, utilize os comandos abaixo para gerenciar o ciclo de vida dos containers:
+
+### 1. Build e Start (Subir o Ambiente)
+Utilize este comando sempre que houver alterações no `main.py`, `App.tsx` ou no `Dockerfile`.
+```bash
+# Otimizado: Builda as imagens e sobe em modo background (detached)
+docker-compose up --build -d
