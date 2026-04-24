@@ -3,10 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import redis
+import json
+import os
 
-app = FastAPI(title="Sistema de Análise Preditiva - TCC")
+app = FastAPI(title="Sistema de Análise Preditiva - Local")
 
-# --- CONFIGURAÇÃO DE CORS ---
+# CORS configurado para uso local (permite o React na porta 3000 falar com o Python na 8000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,80 +17,69 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Conexão com Redis
-r = redis.Redis(host='redis', port=6379, db=0, decode_responses=True)
+# Conexão com o Redis usando variável de ambiente ou default para localhost
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+r = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
 
 class Giro(BaseModel):
     numero: int
 
-class LoteGiros(BaseModel):
-    numeros: List[int]
-
-# Grupos de Referência (Substituem a antiga mapear_dados com mais eficiência)
-VERMELHOS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
-COLUNA1 = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
-COLUNA2 = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35]
-COLUNA3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]
-
-def analisar_probabilidades(historico: List[int]):
-    if len(historico) < 8:
-        return {"sugestoes": ["Aguardar mais dados"], "confianca": "Baixa"}
-
-    v, p, par, imp = 0, 0, 0, 0
-    cols = {1: 0, 2: 0, 3: 0}
-    duz = {1: 0, 2: 0, 3: 0}
-
-    for n in historico:
-        if n == 0: continue
-        # Cores
-        if n in VERMELHOS: v += 1
-        else: p += 1
-        # Paridade
-        if n % 2 == 0: par += 1
-        else: imp += 1
-        # Colunas
-        if n in COLUNA1: cols[1] += 1
-        elif n in COLUNA2: cols[2] += 1
-        elif n in COLUNA3: cols[3] += 1
-        # Dúzias
-        if 1 <= n <= 12: duz[1] += 1
-        elif 13 <= n <= 24: duz[2] += 1
-        else: duz[3] += 1
-
-    sugestoes = []
-    if v >= p + 3: sugestoes.append("PRETO")
-    elif p >= v + 3: sugestoes.append("VERMELHO")
+def mapear_dados(n):
+    """Lógica completa de mapeamento conforme o layout oficial da roleta."""
+    if n == 0: 
+        return {"numero": 0, "cor": "verde", "paridade": "zero", "duzia": 0, "coluna": 0, "metade": "zero"}
     
-    if par >= imp + 3: sugestoes.append("ÍMPAR")
-    elif imp >= par + 3: sugestoes.append("PAR")
-    
-    col_atrasada = min(cols, key=cols.get)
-    if cols[col_atrasada] < (len(historico) / 4): sugestoes.append(f"COLUNA {col_atrasada}")
-
-    confianca = "Alta" if len(sugestoes) >= 2 else "Média"
+    vermelhos = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
+    coluna = 3 if n % 3 == 0 else (n % 3)
     
     return {
-        "sugestoes": sugestoes if sugestoes else ["Aguardar"],
-        "confianca": confianca
+        "numero": n,
+        "cor": "vermelho" if n in vermelhos else "preto",
+        "paridade": "par" if n % 2 == 0 else "impar",
+        "duzia": (n - 1) // 12 + 1,
+        "coluna": coluna,
+        "metade": "1-18" if n <= 18 else "19-36"
     }
 
 @app.post("/input")
 async def registrar_giro(giro: Giro):
-    r.lpush("historico", giro.numero)
-    r.ltrim("historico", 0, 49)
-    return {"status": "sucesso", "numero": giro.numero}
+    if not 0 <= giro.numero <= 36:
+        raise HTTPException(status_code=400, detail="Número inválido")
+    dados = mapear_dados(giro.numero)
+    # Lpush e Ltrim garantem que a memória nunca cresça indefinidamente
+    r.lpush("historico", json.dumps(dados))
+    r.ltrim("historico", 0, 99) 
+    return {"status": "sucesso", "dados": dados}
+
+@app.get("/historico")
+async def consultar_historico():
+    historico_raw = r.lrange("historico", 0, -1)
+    return [json.loads(item) for item in historico_raw]
 
 @app.get("/sugestao")
 async def obter_sugestao():
-    lista = r.lrange("historico", 0, 19)
-    return analisar_probabilidades([int(n) for n in lista])
+    historico = await consultar_historico()
+    if len(historico) < 10:
+        return {"mensagem": "Aguardando amostra mínima (10 giros)..."}
+    
+    cores = [g['cor'] for g in historico]
+    v, p = cores.count("vermelho"), cores.count("preto")
+    
+    sugestao = "Aguardar"
+    if v > (len(cores) * 0.6): sugestao = "Entrar no PRETO"
+    elif p > (len(cores) * 0.6): sugestao = "Entrar no VERMELHO"
+    
+    return {"analise": {"V": v, "P": p}, "sugestao": sugestao}
 
-@app.get("/health-redis")
-async def health_check():
+@app.delete("/limpar-historico")
+async def limpar_historico():
+    r.delete("historico")
+    return {"status": "ok", "mensagem": "Banco Redis resetado"}
+
+@app.get("/health")
+async def health():
     try:
         r.ping()
         return {"status": "healthy", "redis": "connected"}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Redis offline: {str(e)}")
-
-# Mantive as outras funções (historico, batch, limpar) idênticas ao original.
+    except:
+        return {"status": "unhealthy", "redis": "disconnected"}, 503
