@@ -2,6 +2,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
+from datetime import datetime
+import pandas as pd
+import os
 import redis
 import json
 import os
@@ -51,17 +54,45 @@ def mapear_dados(n: int):
         "setor": setor
     }
 
-# --- ROTAS DA API ---
+# Configuração do Dataset para IA
+DATASET_PATH = "intelligence/roulette_dataset.csv"
 
+def coletar_dados_ia(dados_mapeados):
+    """
+    Persiste os dados mapeados em um arquivo CSV para futuro treinamento de ML.
+    Adiciona timestamp para análise de séries temporais.
+    """
+    try:
+        # Garante que o diretório existe
+        os.makedirs(os.path.dirname(DATASET_PATH), exist_ok=True)
+        
+        # Adiciona timestamp para a IA entender a ordem temporal
+        dados_ia = dados_mapeados.copy()
+        dados_ia['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        df = pd.DataFrame([dados_ia])
+        
+        # Salva: se o arquivo não existe, escreve cabeçalho; se existe, apenas anexa (append)
+        header = not os.path.exists(DATASET_PATH)
+        df.to_csv(DATASET_PATH, mode='a', index=False, header=header)
+    except Exception as e:
+        print(f"Erro ao persistir dados para IA: {e}")
+
+# --- No seu endpoint de input, basta chamar a função ---
 @app.post("/input")
 async def registrar_giro(giro: Giro):
-    """Regista o número e mantém o histórico circular no Redis."""
     if not 0 <= giro.numero <= 36:
-        raise HTTPException(status_code=400, detail="Número inválido (0-36)")
+        raise HTTPException(status_code=400, detail="Número inválido")
     
     dados = mapear_dados(giro.numero)
+    
+    # Grava no Redis para a UI (vontátil)
     r.lpush("historico", json.dumps(dados))
-    r.ltrim("historico", 0, 99) # Mantém apenas os últimos 100
+    r.ltrim("historico", 0, 99)
+    
+    # Grava no CSV para a IA (persistente)
+    coletar_dados_ia(dados)
+    
     return {"status": "sucesso", "dados": dados}
 
 @app.get("/historico")

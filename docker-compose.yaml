@@ -12,6 +12,9 @@ services:
     container_name: api_analise
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./intelligence_data:/app/intelligence # Mapeia a pasta local para o container
     environment:
       - REDIS_HOST=redis
     depends_on:

@@ -3,3 +3,4 @@ uvicorn
 pydantic
 redis
 requests
+pandas==2.2.1
