@@ -1,12 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
 import redis
 import json
 
-app = FastAPI(title="Analytica Pro - SRE Edition")
+app = FastAPI(title="Roulette Analysis Engine")
 
+# CORS habilitado para comunicação entre containers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,66 +35,44 @@ def mapear_dados(n):
     }
 
 @app.post("/input")
-async def registrar_individual(giro: Giro):
-    if not 0 <= giro.numero <= 36:
-        raise HTTPException(status_code=400, detail="Número inválido")
+async def registrar(giro: Giro):
     dados = mapear_dados(giro.numero)
     r.lpush("historico", json.dumps(dados))
     r.ltrim("historico", 0, 99)
-    return {"status": "sucesso", "dados": dados}
+    return {"status": "sucesso"}
 
 @app.get("/historico")
-async def consultar_historico():
-    historico_raw = r.lrange("historico", 0, -1)
-    return [json.loads(item) for item in historico_raw]
+async def get_historico():
+    hist = r.lrange("historico", 0, -1)
+    return [json.loads(i) for i in hist]
 
 @app.get("/sugestao")
-async def obter_sugestao():
-    historico = await consultar_historico()
-    total = len(historico)
+async def get_sugestao():
+    hist = await get_historico()
+    total = len(hist)
     if total < 12:
-        return {"mensagem": f"Aguardando amostra (Mínimo 12, atual: {total})"}
+        return {"mensagem": f"Amostra pequena ({total}/12)"}
     
-    # Contadores
-    cores = [g['cor'] for g in historico]
-    duzias = [g['duzia'] for g in historico if g['duzia'] != 0]
-    colunas = [g['coluna'] for g in historico if g['coluna'] != 0]
-    paridades = [g['paridade'] for g in historico if g['paridade'] != "zero"]
-
+    cores = [g['cor'] for g in hist]
+    v, p = cores.count("vermelho"), cores.count("preto")
+    duzias = [g['duzia'] for g in hist if g['duzia'] != 0]
+    colunas = [g['coluna'] for g in hist if g['coluna'] != 0]
+    
     sugestoes = []
+    # Lógica de Cores (Desvio > 60%)
+    if v > (total * 0.6): sugestoes.append("PRETO")
+    elif p > (total * 0.6): sugestoes.append("VERMELHO")
+    
+    # Lógica de Dúzias e Colunas (Quem está "atrasado" < 25%)
+    for label, lista, items in [("DÚZIA", duzias, [1,2,3]), ("COLUNA", colunas, [1,2,3])]:
+        counts = {item: lista.count(item) for item in items}
+        atrasado = min(counts, key=counts.get)
+        if counts[atrasado] < (len(lista) / 4):
+            sugestoes.append(f"{atrasado}ª {label}")
 
-    # Lógica de Cores
-    v = cores.count("vermelho")
-    p = cores.count("preto")
-    if v > (total * 0.6): sugestoes.append("PRETO (Cor)")
-    elif p > (total * 0.6): sugestoes.append("VERMELHO (Cor)")
-
-    # Lógica de Dúzias (Sugere a que menos saiu)
-    count_d = {d: duzias.count(d) for d in [1, 2, 3]}
-    duzia_atrasada = min(count_d, key=count_d.get)
-    if count_d[duzia_atrasada] < (len(duzias) / 4): # Se saiu menos que 25%
-        sugestoes.append(f"{duzia_atrasada}ª DÚZIA")
-
-    # Lógica de Colunas
-    count_c = {c: colunas.count(c) for c in [1, 2, 3]}
-    coluna_atrasada = min(count_c, key=count_c.get)
-    if count_c[coluna_atrasada] < (len(colunas) / 4):
-        sugestoes.append(f"{coluna_atrasada}ª COLUNA")
-
-    # Lógica Par/Impar
-    par = paridades.count("par")
-    impar = paridades.count("impar")
-    if par > (len(paridades) * 0.6): sugestoes.append("ÍMPAR")
-    elif impar > (len(paridades) * 0.6): sugestoes.append("PAR")
-
-    return {
-        "v": v, "p": p,
-        "analise_duzias": count_d,
-        "analise_colunas": count_c,
-        "sugestoes": sugestoes if sugestoes else ["Aguardar melhor desvio"]
-    }
+    return {"v": v, "p": p, "sugestoes": sugestoes if sugestoes else ["AGUARDAR"]}
 
 @app.delete("/limpar-historico")
-async def limpar_historico():
+async def limpar():
     r.delete("historico")
-    return {"status": "sucesso"}
+    return {"status": "ok"}
