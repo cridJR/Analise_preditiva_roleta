@@ -1,0 +1,83 @@
+/* 1. Primeiro as diretivas do Tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. Definição de Variáveis */
+:root {
+  --text: #9ca3af;
+  --text-h: #f3f4f6;
+  --bg: #111827; /* gray-900 do Tailwind para consistência */
+  --border: #374151;
+  --code-bg: #1f2937;
+  --accent: #3b82f6;
+  
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 3. Reset e Estilos de Base */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  max-width: 1280px; /* Largura padrão para dashboards */
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 4. Tipografia Ajustada para o Painel */
+h1, h2, h3 {
+  color: var(--text-h);
+  font-family: var(--sans);
+  font-weight: 700;
+}
+
+h1 {
+  font-size: 2.5rem;
+  letter-spacing: -0.05em;
+}
+
+@media (max-width: 1024px) {
+  h1 { font-size: 1.875rem; }
+  :root { font-size: 16px; }
+}
+
+/* 5. Estilos para os componentes de código/números */
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  padding: 0.2em 0.4em;
+  background: var(--code-bg);
+  border-radius: 4px;
+  color: #60a5fa; /* Azul claro para destacar */
+}
+
+/* Customização da Scrollbar (estilo dark moderno) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
