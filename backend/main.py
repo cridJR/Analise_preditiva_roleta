@@ -7,7 +7,7 @@ import pandas as pd
 import os
 import redis
 import json
-import os
+import joblib
 
 app = FastAPI(title="Roulette Analysis Engine - Pro SRE")
 
@@ -24,12 +24,15 @@ app.add_middleware(
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 r = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
 
+# Caminho do Modelo de IA (Mapeado via Volume Docker)
+MODEL_PATH = "intelligence/trained_model.pkl"
+DATASET_PATH = "intelligence/roulette_dataset.csv"
+
 class Giro(BaseModel):
     numero: int
 
 def mapear_dados(n: int):
     """Mapeia propriedades matemáticas e físicas (Cilindro) do número."""
-    # Definição de Setores Físicos (Racetrack)
     voisins = [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25]
     tiers = [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33]
     orphelins = [1, 20, 14, 31, 9, 17, 34, 6]
@@ -41,8 +44,6 @@ def mapear_dados(n: int):
         }
     
     vermelhos = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]
-    
-    # Determinação do Setor
     setor = "Voisins" if n in voisins else ("Tiers" if n in tiers else "Orphelins")
     
     return {
@@ -54,86 +55,76 @@ def mapear_dados(n: int):
         "setor": setor
     }
 
-# Configuração do Dataset para IA
-DATASET_PATH = "intelligence/roulette_dataset.csv"
-
 def coletar_dados_ia(dados_mapeados):
-    """
-    Persiste os dados mapeados em um arquivo CSV para futuro treinamento de ML.
-    Adiciona timestamp para análise de séries temporais.
-    """
+    """Persiste dados em CSV para treinamento futuro."""
     try:
-        # Garante que o diretório existe
         os.makedirs(os.path.dirname(DATASET_PATH), exist_ok=True)
-        
-        # Adiciona timestamp para a IA entender a ordem temporal
         dados_ia = dados_mapeados.copy()
         dados_ia['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
         df = pd.DataFrame([dados_ia])
-        
-        # Salva: se o arquivo não existe, escreve cabeçalho; se existe, apenas anexa (append)
         header = not os.path.exists(DATASET_PATH)
         df.to_csv(DATASET_PATH, mode='a', index=False, header=header)
     except Exception as e:
         print(f"Erro ao persistir dados para IA: {e}")
 
-# --- No seu endpoint de input, basta chamar a função ---
 @app.post("/input")
 async def registrar_giro(giro: Giro):
     if not 0 <= giro.numero <= 36:
         raise HTTPException(status_code=400, detail="Número inválido")
     
     dados = mapear_dados(giro.numero)
-    
-    # Grava no Redis para a UI (vontátil)
     r.lpush("historico", json.dumps(dados))
     r.ltrim("historico", 0, 99)
-    
-    # Grava no CSV para a IA (persistente)
     coletar_dados_ia(dados)
-    
     return {"status": "sucesso", "dados": dados}
 
 @app.get("/historico")
 async def consultar_historico():
-    """Retorna a lista de giros formatada."""
     historico_raw = r.lrange("historico", 0, -1)
     return [json.loads(item) for item in historico_raw]
 
 @app.get("/sugestao")
 async def obter_sugestao():
-    """Analisa desvios estatísticos e tendências físicas do cilindro."""
     hist = await consultar_historico()
     total = len(hist)
     
     if total < 12:
-        return {"mensagem": f"Amostra insuficiente ({total}/12)"}
+        return {"mensagem": f"Amostra insuficiente ({total}/12)", "v": 0, "p": 0, "sugestoes": []}
     
     sugestoes = []
     
-    # 1. Análise de Cores (Desvio > 60%)
+    # --- CÁLCULO DE CORES (Obrigatório para o retorno) ---
     cores = [g['cor'] for g in hist]
-    v, p = cores.count("vermelho"), cores.count("preto")
-    if v > (total * 0.6): sugestoes.append("PRETO (Desvio Cor)")
-    elif p > (total * 0.6): sugestoes.append("VERMELHO (Desvio Cor)")
-    
-    # 2. Análise de Dúzias e Colunas (Atraso < 25%)
-    duzias = [g['duzia'] for g in hist if g['duzia'] != 0]
-    colunas = [g['coluna'] for g in hist if g['coluna'] != 0]
-    
-    for label, lista, items in [("DÚZIA", duzias, [1,2,3]), ("COLUNA", colunas, [1,2,3])]:
-        if not lista: continue
-        counts = {item: lista.count(item) for item in items}
-        atrasado = min(counts, key=counts.get)
-        if counts[atrasado] < (len(lista) / 4):
-            sugestoes.append(f"{atrasado}ª {label}")
+    v = cores.count("vermelho")
+    p = cores.count("preto")
 
-    # 3. Análise de Setores do Cilindro (Tendência Física > 45%)
-    setores = [g['setor'] for g in hist]
-    for s_nome in ["Voisins", "Tiers", "Orphelins"]:
-        if setores.count(s_nome) > (total * 0.45):
-            sugestoes.append(f"SETOR {s_nome.upper()} (Tendência)")
+    # --- INFERÊNCIA DE IA ---
+    if os.path.exists(MODEL_PATH):
+        try:
+            data = joblib.load(MODEL_PATH)
+            model = data['model']
+            le_setor = data['le_setor']
+            le_cor = data['le_cor']
+            
+            ultimo = hist[0]
+            
+            # Sincronizado com as 4 colunas do train_ia.py: 
+            # [setor_encoded, cor_encoded, duzia, coluna]
+            setor_num = le_setor.transform([ultimo['setor']])[0]
+            cor_num = le_cor.transform([ultimo['cor']])[0]
+            
+            X_input = [[setor_num, cor_num, ultimo['duzia'], ultimo['coluna']]]
+            
+            pred_num = model.predict(X_input)
+            setor_predito = le_setor.inverse_transform(pred_num)[0]
+            
+            sugestoes.append(f"🤖 IA PREVÊ: {setor_predito.upper()}")
+        except Exception as e:
+            print(f"Erro na inferência da IA: {e}")
+
+    # --- LÓGICA MATEMÁTICA ---
+    if v > (total * 0.6): sugestoes.append("PRETO (DESVIO COR)")
+    elif p > (total * 0.6): sugestoes.append("VERMELHO (DESVIO COR)")
 
     return {
         "v": v, 
@@ -143,15 +134,5 @@ async def obter_sugestao():
 
 @app.delete("/limpar-historico")
 async def limpar_historico():
-    """Remove a chave do histórico no Redis."""
     r.delete("historico")
     return {"status": "sucesso", "mensagem": "Histórico removido"}
-
-@app.get("/health")
-async def health_check():
-    """Verifica conexão com o Redis."""
-    try:
-        r.ping()
-        return {"status": "online", "redis": "connected"}
-    except:
-        raise HTTPException(status_code=503, detail="Redis offline")
