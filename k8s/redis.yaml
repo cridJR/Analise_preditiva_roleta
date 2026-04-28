@@ -13,7 +13,8 @@ spec:
     spec:
       containers:
       - name: redis
-        image: redis:alpine
+        image: docker.io/redis:alpine
+        imagePullPolicy: IfNotPresent # Só baixa se não existir no nó
         ports:
         - containerPort: 6379
 ---
