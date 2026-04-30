@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roulette-backend
+spec:
+  selector:
+    matchLabels:
+      app: roulette-backend
+  template:
+    metadata:
+      labels:
+        app: roulette-backend
+    spec:
+      containers:
+      - name: roulette-backend
+        image: euclidesalgartelecom/roulette-backend:v1.0.0 # A imagem que você está tentando buildar
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_HOST
+          value: "redis"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: roulette-backend
+spec:
+  selector:
+    app: roulette-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
