@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/cridJR/Analise_preditiva_roleta.git
     targetRevision: feature/ia-intelligence
-    path: k8s # Pasta onde estão seus arquivos YAML
+    path: k3s # Pasta onde estão seus arquivos YAML
   destination:
     server: https://kubernetes.default.svc
     namespace: roulette-prod
